@@ -1,21 +1,33 @@
+<!-- index.html (Stage 2) - Add movement buttons -->
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GyroSphere Balance</title>
+    <title>Gyro Warriors</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="game-container">
         <canvas id="gameCanvas"></canvas>
         <div class="ui-overlay">
+            <div id="health">Health: 100</div>
+            <div id="ammo">Ammo: 30</div>
             <div id="score">Score: 0</div>
-            <button id="startButton">Start</button>
-            <div id="highScore">High Score: 0</div>
-            <div id="message"></div>  <!-- For game over messages, instructions, etc. -->
+            <button id="weaponSwitch">Switch Weapon</button> <!-- New button -->
+             <!-- Movement buttons -->
+             <div class="movement-controls">
+                <button id="moveUp">↑</button>
+                <button id="moveDown">↓</button>
+                <button id="moveLeft">←</button>
+                <button id="moveRight">→</button>
+            </div>
+            <button id="fireButton">Fire</button>
+            <div id="message"></div>
         </div>
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js" integrity="sha512-5T245ZTH0m0RfONiFm2nf8v সব্বh0atj60e5y5w5xX3ArIexOM5J6r+o8OS58a5Zn6aMIX/hTO7g6V6NvSYDMNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="script.js"></script>
 </body>
 </html>
