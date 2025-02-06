@@ -1,0 +1,83 @@
+/* style.css */
+
+body {
+    margin: 0;
+    overflow: hidden; /* Prevent scrollbars */
+    background-color: #f0f0f0;
+    font-family: sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.game-container {
+    position: relative; /* To position the UI overlay */
+    width: 80vw; /* Responsive width */
+    height: 80vw; /* Responsive height, keep it square */
+    max-width: 500px; /* Limit maximum size */
+    max-height: 500px;
+    border: 2px solid #333; /* Subtle border */
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Nice shadow */
+}
+
+#gameCanvas {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #e0e0e0, #ffffff); /* Subtle gradient */
+    border-radius: 10px;
+}
+
+.ui-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between; /* Space out elements */
+    padding: 20px;
+    color: #333;
+    pointer-events: none; /* Allow clicks to pass through to the canvas (important!) */
+}
+
+#score, #highScore {
+    font-size: 1.5em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+}
+#message{
+    font-size: 2em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    margin-bottom: 10vh;
+}
+
+#startButton {
+    padding: 10px 20px;
+    font-size: 1.2em;
+    background-color: #4CAF50; /* Green */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    pointer-events: auto;  /* This button *should* receive events */
+    transition: background-color 0.3s ease;
+}
+
+#startButton:hover {
+    background-color: #3e8e41;
+}
+
+/* Responsive adjustments (example) */
+@media (max-width: 600px) {
+    .ui-overlay {
+        padding: 10px;
+    }
+    #score, #highScore {
+        font-size: 1.2em;
+    }
+}
