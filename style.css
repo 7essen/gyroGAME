@@ -1,9 +1,8 @@
-/* style.css */
-
+/* style.css (Stage 2) - Style movement buttons */
 body {
     margin: 0;
-    overflow: hidden; /* Prevent scrollbars */
-    background-color: #f0f0f0;
+    overflow: hidden;
+    background-color: #222;
     font-family: sans-serif;
     display: flex;
     justify-content: center;
@@ -12,21 +11,18 @@ body {
 }
 
 .game-container {
-    position: relative; /* To position the UI overlay */
-    width: 80vw; /* Responsive width */
-    height: 80vw; /* Responsive height, keep it square */
-    max-width: 500px; /* Limit maximum size */
-    max-height: 500px;
-    border: 2px solid #333; /* Subtle border */
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Nice shadow */
+    position: relative;
+    width: 90vw;
+    height: 90vw;
+    max-width: 800px;
+    max-height: 800px;
+    border: 2px solid #555;
 }
 
 #gameCanvas {
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #e0e0e0, #ffffff); /* Subtle gradient */
-    border-radius: 10px;
+    background-color: #333;
 }
 
 .ui-overlay {
@@ -37,47 +33,93 @@ body {
     height: 100%;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: space-between; /* Space out elements */
+    align-items: flex-start; /* Align items to the start */
+    color: white;
+    pointer-events: none;
     padding: 20px;
-    color: #333;
-    pointer-events: none; /* Allow clicks to pass through to the canvas (important!) */
+    box-sizing: border-box;
 }
 
-#score, #highScore {
-    font-size: 1.5em;
-    font-weight: bold;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-}
-#message{
-    font-size: 2em;
-    font-weight: bold;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-    margin-bottom: 10vh;
-}
-
-#startButton {
-    padding: 10px 20px;
+#health, #ammo, #score {
     font-size: 1.2em;
-    background-color: #4CAF50; /* Green */
+    margin-bottom: 5px;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+}
+#weaponSwitch{
+    position: absolute;
+    top: 50px;
+    right: 20px;
+    padding: 10px 15px;
+    font-size: 1em;
+    background-color: #666;
     color: white;
     border: none;
     border-radius: 5px;
     cursor: pointer;
-    pointer-events: auto;  /* This button *should* receive events */
-    transition: background-color 0.3s ease;
+    pointer-events: auto; /* Make it clickable */
+     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+     z-index: 10;
+
 }
 
-#startButton:hover {
-    background-color: #3e8e41;
+#fireButton {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    padding: 15px 30px;
+    font-size: 1.5em;
+    background-color: #d9534f;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-/* Responsive adjustments (example) */
-@media (max-width: 600px) {
-    .ui-overlay {
-        padding: 10px;
-    }
-    #score, #highScore {
-        font-size: 1.2em;
-    }
+#fireButton:hover {
+    background-color: #c9302c;
+}
+
+.movement-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    display: grid;
+    grid-template-columns: repeat(3, 40px); /* 3 columns */
+    grid-template-rows: repeat(2, 40px);    /* 2 rows */
+    gap: 5px; /* Spacing between buttons */
+}
+
+/* Individual button styles */
+.movement-controls button {
+    width: 40px;
+    height: 40px;
+    font-size: 1em;
+    background-color: #444;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+
+}
+
+.movement-controls button:hover {
+    background-color: #555;
+}
+
+/* Position each button in the grid */
+#moveUp    { grid-area: 1 / 2 / 2 / 3; } /* Row 1, Column 2 */
+#moveDown  { grid-area: 2 / 2 / 3 / 3; } /* Row 2, Column 2 */
+#moveLeft  { grid-area: 2 / 1 / 3 / 2; } /* Row 2, Column 1 */
+#moveRight { grid-area: 2 / 3 / 3 / 4; } /* Row 2, Column 3 */
+
+#message{
+    font-size: 2em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    margin-top: 30vh;
+    margin-left: 30vw;
 }
