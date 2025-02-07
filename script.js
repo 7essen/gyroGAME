@@ -1,4 +1,4 @@
-// script.js (Stage 2)
+// script.js (Complete Stage 2 - Combined and Refactored)
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -7,7 +7,7 @@ const healthDisplay = document.getElementById('health');
 const ammoDisplay = document.getElementById('ammo');
 const messageDisplay = document.getElementById('message');
 const scoreDisplay = document.getElementById('score');
-const weaponSwitchButton = document.getElementById('weaponSwitch'); // New
+const weaponSwitchButton = document.getElementById('weaponSwitch');
 
 // Movement buttons
 const moveUpButton = document.getElementById('moveUp');
@@ -29,7 +29,7 @@ let player = {
     angle: 0,
     speed: 5,
     currentWeapon: 'pistol', // 'pistol' or 'shotgun'
-    shotgunAmmo: 10 // Separate ammo for shotgun
+    shotgunAmmo: 10,
 };
 
 let bullets = [];
@@ -47,25 +47,34 @@ let moveInput = {
 };
 
 // --- Utility Functions ---
+
 function initCanvasSize() {
     canvas.width = canvas.parentElement.clientWidth;
     canvas.height = canvas.parentElement.clientHeight;
-    resetGame();
+    resetGame(); // Reset positions on resize
 }
 
+// Helper function for creating walls
 function createWall(x, y, width, height) {
-    const wall = Matter.Bodies.rectangle(x, y, width, height, { isStatic: true, label: 'wall', render: { fillStyle: '#8B4513' } });
+    const wall = Matter.Bodies.rectangle(x, y, width, height, {
+        isStatic: true,
+        label: 'wall',
+        render: { fillStyle: '#8B4513' }  // Brown color for walls
+    });
     Matter.World.add(world, wall);
     return wall;
 }
 
+// Creates walls around the edges of the canvas
 function createArenaBounds() {
     const wallThickness = 20;
-    createWall(canvas.width / 2, -wallThickness / 2, canvas.width, wallThickness);
-    createWall(canvas.width / 2, canvas.height + wallThickness / 2, canvas.width, wallThickness);
-    createWall(-wallThickness / 2, canvas.height / 2, wallThickness, canvas.height);
-    createWall(canvas.width + wallThickness / 2, canvas.height / 2, wallThickness, canvas.height);
+    createWall(canvas.width / 2, -wallThickness / 2, canvas.width, wallThickness); // Top
+    createWall(canvas.width / 2, canvas.height + wallThickness / 2, canvas.width, wallThickness); // Bottom
+    createWall(-wallThickness / 2, canvas.height / 2, wallThickness, canvas.height); // Left
+    createWall(canvas.width + wallThickness / 2, canvas.height / 2, wallThickness, canvas.height); // Right
 }
+
+// --- Object Creation Functions ---
 
 function createPlayer() {
     player.body = Matter.Bodies.rectangle(canvas.width / 2, canvas.height / 2, player.size, player.size, {
@@ -81,10 +90,11 @@ function createEnemy() {
     if (enemies.length < maxEnemies) {
         const size = 25;
         let x, y;
+        // Keep generating random positions until the enemy is far enough from the player
         do {
             x = Math.random() * canvas.width;
             y = Math.random() * canvas.height;
-        } while (Matter.Vector.magnitude({x: x - player.body.position.x, y: y- player.body.position.y}) < 200);
+        } while (Matter.Vector.magnitude({ x: x - player.body.position.x, y: y - player.body.position.y }) < 200);
 
         const enemy = {
             body: Matter.Bodies.rectangle(x, y, size, size, {
@@ -104,6 +114,7 @@ function createEnemy() {
 }
 
 // --- Drawing Functions ---
+
 function drawPlayer() {
     ctx.save();
     ctx.translate(player.body.position.x, player.body.position.y);
@@ -112,7 +123,7 @@ function drawPlayer() {
     ctx.fillRect(-player.size / 2, -player.size / 2, player.size, player.size);
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(player.size, 0);
+    ctx.lineTo(player.size, 0);  // Facing direction
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 2;
     ctx.stroke();
@@ -120,10 +131,10 @@ function drawPlayer() {
 }
 
 function drawBullets() {
-    ctx.fillStyle = 'yellow';
     bullets.forEach(bullet => {
         ctx.beginPath();
         ctx.arc(bullet.position.x, bullet.position.y, bullet.radius, 0, 2 * Math.PI);
+        ctx.fillStyle = bullet.render.fillStyle; // Use bullet's fillStyle
         ctx.fill();
     });
 }
@@ -132,11 +143,13 @@ function drawEnemies() {
     enemies.forEach(enemy => {
         ctx.save();
         ctx.translate(enemy.body.position.x, enemy.body.position.y);
+        // Rotate the enemy to face the player
         const angleToPlayer = Matter.Vector.angle(enemy.body.position, player.body.position);
         ctx.rotate(angleToPlayer);
-        ctx.fillStyle = 'red';
+        ctx.fillStyle = enemy.body.render.fillStyle; // Use enemy's fillStyle
         ctx.fillRect(-enemy.size / 2, -enemy.size / 2, enemy.size, enemy.size);
 
+        // Draw enemy health bar
         const healthBarWidth = enemy.size;
         const healthBarHeight = 5;
         const healthPercentage = enemy.health / 30;
@@ -144,9 +157,11 @@ function drawEnemies() {
         ctx.fillRect(-healthBarWidth / 2, -enemy.size / 2 - 15, healthBarWidth, healthBarHeight);
         ctx.fillStyle = 'green';
         ctx.fillRect(-healthBarWidth / 2, -enemy.size / 2 - 15, healthBarWidth * healthPercentage, healthBarHeight);
+
         ctx.restore();
     });
 }
+
 // --- Game Logic Functions ---
 
 function update() {
@@ -154,15 +169,15 @@ function update() {
 
     Matter.Engine.update(engine, 1000 / 60);
 
-     // Handle player movement input
-     handleMovementInput();
-
+    handleMovementInput();
     applyBoundaries(player.body, player.size);
 
+    // Update UI
     healthDisplay.textContent = `Health: ${player.health}`;
-    ammoDisplay.textContent = `Ammo: ${player.currentWeapon === 'pistol' ? player.ammo : player.shotgunAmmo}`; // Show correct ammo
+    ammoDisplay.textContent = `Ammo: ${player.currentWeapon === 'pistol' ? player.ammo : player.shotgunAmmo}`;
     scoreDisplay.textContent = `Score: ${score}`;
 
+    // Update and remove off-screen bullets
     for (let i = bullets.length - 1; i >= 0; i--) {
         const bullet = bullets[i];
         if (bullet.position.x < 0 || bullet.position.x > canvas.width ||
@@ -172,6 +187,7 @@ function update() {
         }
     }
 
+    // Update enemies and AI
     for (let i = enemies.length - 1; i >= 0; i--) {
         const enemy = enemies[i];
         const direction = Matter.Vector.sub(player.body.position, enemy.body.position);
@@ -184,10 +200,11 @@ function update() {
             Matter.World.remove(world, enemy.body);
             enemies.splice(i, 1);
             score += 10;
-            createEnemy();
+            createEnemy(); // Respawn enemies
         }
     }
 
+    // Render the scene
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawPlayer();
     drawBullets();
@@ -195,6 +212,7 @@ function update() {
 
     requestAnimationFrame(update);
 }
+
 function handleMovementInput() {
     let moveX = 0;
     let moveY = 0;
@@ -204,25 +222,7 @@ function handleMovementInput() {
     if (moveInput.left) moveX -= player.speed;
     if (moveInput.right) moveX += player.speed;
 
-    // Set the player's velocity
     Matter.Body.setVelocity(player.body, { x: moveX, y: moveY });
-}
-function startGame() {
-    isPlaying = true;
-    score = 0;
-    messageDisplay.textContent = '';
-    player.health = 100;
-    player.ammo = 30;
-    player.shotgunAmmo = 10; // Initialize shotgun ammo
-    player.currentWeapon = 'pistol';
-    createPlayer();
-    createArenaBounds();
-    enemies.forEach(enemy => Matter.World.remove(world, enemy.body));
-    enemies = [];
-    for (let i = 0; i < maxEnemies; i++) {
-        createEnemy();
-    }
-    requestAnimationFrame(update);
 }
 
 function applyBoundaries(body, size) {
@@ -244,43 +244,15 @@ function applyBoundaries(body, size) {
         Matter.Body.setVelocity(body, { x: body.velocity.x, y: 0 });
     }
 }
-
-let previousTiltLR = null;
-let previousTiltFB = null;
-
-function handleOrientation(event) {
-  if (!isPlaying) return;
-  let tiltLR = event.gamma || 0;
-  let tiltFB = event.beta || 0;
-
-  if (window.innerWidth > window.innerHeight) {
-    [tiltLR, tiltFB] = [tiltFB, tiltLR];
-  }
-  const smoothing = 0.2;
-  tiltLR = tiltLR * smoothing + (1 - smoothing) * (previousTiltLR || tiltLR);
-  // script.js (Stage 2 Continued)
-
-  tiltFB = tiltFB * smoothing + (1 - smoothing) * (previousTiltFB || tiltFB);
-  previousTiltLR = tiltLR;
-  previousTiltFB = tiltFB;
-  player.angle = Math.atan2(tiltFB, tiltLR) - Math.PI / 2;
-}
+// --- Weapon and Bullet Functions ---
 
 function fireBullet() {
-    if (player.currentWeapon === 'pistol') {
-        if (player.ammo > 0) {
-            player.ammo--;
-            createSingleBullet(5, 15); // size, speed
-        } else {
-            console.log("Out of pistol ammo!");
-        }
-    } else if (player.currentWeapon === 'shotgun') {
-        if (player.shotgunAmmo > 0) {
-            player.shotgunAmmo--;
-            createShotgunBlast();
-        } else {
-            console.log("Out of shotgun ammo!");
-        }
+    if (player.currentWeapon === 'pistol' && player.ammo > 0) {
+        player.ammo--;
+        createSingleBullet(5, 15);
+    } else if (player.currentWeapon === 'shotgun' && player.shotgunAmmo > 0) {
+        player.shotgunAmmo--;
+        createShotgunBlast();
     }
 }
 
@@ -293,10 +265,8 @@ function createSingleBullet(size, speed) {
         label: 'bullet',
         render: { fillStyle: 'yellow' }
     });
-    const velocity = {
-        x: speed * Math.cos(player.angle),
-        y: speed * Math.sin(player.angle)
-    };
+    bullet.radius = size; // Store the radius for drawing
+    const velocity = { x: speed * Math.cos(player.angle), y: speed * Math.sin(player.angle) };
     Matter.Body.setVelocity(bullet, velocity);
     Matter.World.add(world, bullet);
     bullets.push(bullet);
@@ -304,14 +274,13 @@ function createSingleBullet(size, speed) {
 
 function createShotgunBlast() {
     const numPellets = 8;
-    const spread = 0.3; // Adjust for spread angle
+    const spread = 0.3;
     const pelletSpeed = 12;
     const pelletSize = 3;
 
     for (let i = 0; i < numPellets; i++) {
-        const angleOffset = (Math.random() - 0.5) * spread; // Random spread
+        const angleOffset = (Math.random() - 0.5) * spread;
         const pelletAngle = player.angle + angleOffset;
-
         const pelletX = player.body.position.x + (player.size / 2) * Math.cos(pelletAngle);
         const pelletY = player.body.position.y + (player.size / 2) * Math.sin(pelletAngle);
 
@@ -319,49 +288,50 @@ function createShotgunBlast() {
             frictionAir: 0.01,
             restitution: 0.5,
             label: 'bullet',
-            render: { fillStyle: 'orange' } // Different color for shotgun pellets
+            render: { fillStyle: 'orange' }
         });
-
-        const velocity = {
-            x: pelletSpeed * Math.cos(pelletAngle),
-            y: pelletSpeed * Math.sin(pelletAngle)
-        };
+        pellet.radius = pelletSize;
+        const velocity = { x: pelletSpeed * Math.cos(pelletAngle), y: pelletSpeed * Math.sin(pelletAngle) };
         Matter.Body.setVelocity(pellet, velocity);
         Matter.World.add(world, pellet);
         bullets.push(pellet);
     }
 }
-
 function switchWeapon() {
-    if (player.currentWeapon === 'pistol') {
-        player.currentWeapon = 'shotgun';
-    } else {
-        player.currentWeapon = 'pistol';
-    }
+    player.currentWeapon = player.currentWeapon === 'pistol' ? 'shotgun' : 'pistol';
     console.log("Current weapon:", player.currentWeapon);
 }
 
+// --- Collision Handling ---
+
 function setupCollisionHandling() {
-  Matter.Events.on(engine, 'collisionStart', (event) => {
-    const pairs = event.pairs;
-    for (let i = 0; i < pairs.length; i++) {
-      const pair = pairs[i];
-      const bodyA = pair.bodyA;
-      const bodyB = pair.bodyB;
+    Matter.Events.on(engine, 'collisionStart', (event) => {
+        const pairs = event.pairs;
+        for (const pair of pairs) { // More concise loop
+            const { bodyA, bodyB } = pair;
 
-      if (bodyA.label === 'bullet' && bodyB.label === 'enemy') {
-        handleBulletHitEnemy(bodyA, bodyB);
-      } else if (bodyB.label === 'bullet' && bodyA.label === 'enemy') {
-        handleBulletHitEnemy(bodyB, bodyA);
-      } else if (bodyA.label === 'enemy' && bodyB.label === 'player') {
-        handlePlayerEnemyCollision(bodyA, bodyB);
-      } else if (bodyB.label === 'enemy' && bodyA.label === 'player') {
-        handlePlayerEnemyCollision(bodyB, bodyA);
-      }
-    }
-  });
+            if (bodyA.label === 'bullet' && bodyB.label === 'enemy') {
+                handleBulletHitEnemy(bodyA, bodyB);
+            } else if (bodyB.label === 'bullet' && bodyA.label === 'enemy') {
+                handleBulletHitEnemy(bodyB, bodyA);
+            } else if ((bodyA.label === 'enemy' && bodyB.label === 'player') || (bodyB.label === 'enemy' && bodyA.label === 'player')) {
+                 handlePlayerEnemyCollision(bodyA, bodyB);
+            }
+        }
+    });
 }
+function handlePlayerEnemyCollision(bodyA, bodyB) {
+    // Determine which body is the player and which is the enemy
+    const playerBody = bodyA.label === 'player' ? bodyA : bodyB;
+    const enemyBody = bodyA.label === 'enemy' ? bodyA : bodyB;
+    // Reduce player's health
+    player.health -= 5;
 
+    // Check for game over
+    if (player.health <= 0) {
+        gameOver();
+    }
+}
 function handleBulletHitEnemy(bullet, enemyBody) {
     Matter.World.remove(world, bullet);
     const bulletIndex = bullets.indexOf(bullet);
@@ -371,39 +341,96 @@ function handleBulletHitEnemy(bullet, enemyBody) {
 
     const enemy = enemies.find(e => e.body === enemyBody);
     if (enemy) {
-        enemy.health -= (player.currentWeapon === 'pistol' ? 10 : 5); // Shotgun deals less damage per pellet
+        enemy.health -= (player.currentWeapon === 'pistol' ? 10 : 5);
     }
 }
 
-function handlePlayerEnemyCollision(enemy, playerBody) {
-    player.health -= 5;
-    if (player.health <= 0) {
-        gameOver();
+// --- Game State Functions ---
+function resetGame() {
+    // Reset player
+    player.health = 100;
+    player.ammo = 30;
+    player.shotgunAmmo = 10;
+    player.currentWeapon = 'pistol';
+    if (player.body) {
+        Matter.Body.setPosition(player.body, { x: canvas.width / 2, y: canvas.height / 2 });
+        Matter.Body.setVelocity(player.body, {x: 0, y: 0});
     }
+
+    // Clear bullets
+    bullets.forEach(b => Matter.World.remove(world, b));
+    bullets = [];
+
+    // Clear and recreate enemies
+    enemies.forEach(e => Matter.World.remove(world, e.body));
+    enemies = [];
+    for (let i = 0; i < maxEnemies; i++) {
+        createEnemy();
+    }
+     score = 0;
+}
+
+function startGame() {
+    if(isPlaying) return; // Prevent starting multiple games
+    isPlaying = true;
+    score = 0;
+    messageDisplay.textContent = '';
+    createPlayer(); // Create or reset the player
+    createArenaBounds(); //Create the arena
+    requestAnimationFrame(update); // Start/resume the game loop
 }
 
 function gameOver() {
     isPlaying = false;
     messageDisplay.textContent = 'Game Over!';
-    Matter.World.remove(world, player.body);
+
+    // Clean up Matter.js bodies
+    if (player.body) {
+        Matter.World.remove(world, player.body);
+    }
     bullets.forEach(b => Matter.World.remove(world, b));
-    bullets = [];
     enemies.forEach(e => Matter.World.remove(world, e.body));
+
+    // Clear arrays
+    bullets = [];
     enemies = [];
 }
 
-// --- Event Listeners and Initialization ---
+// --- Input Handling ---
+
+let previousTiltLR = null;
+let previousTiltFB = null;
+
+function handleOrientation(event) {
+    if (!isPlaying) return;
+
+    let tiltLR = event.gamma || 0;
+    let tiltFB = event.beta || 0;
+
+    // Landscape mode adjustment
+    if (window.innerWidth > window.innerHeight) {
+        [tiltLR, tiltFB] = [tiltFB, tiltLR];
+    }
+
+    // Smoothing
+    const smoothing = 0.2;
+    tiltLR = tiltLR * smoothing + (1 - smoothing) * (previousTiltLR || tiltLR);
+    tiltFB = tiltFB * smoothing + (1 - smoothing) * (previousTiltFB || tiltFB);
+    previousTiltLR = tiltLR;
+    previousTiltFB = tiltFB;
+
+    // Calculate player angle
+    player.angle = Math.atan2(tiltFB, tiltLR) - Math.PI / 2;
+}
+
+// --- Event Listeners ---
 
 initCanvasSize();
 window.addEventListener('resize', initCanvasSize);
-
-// Fire button
 fireButton.addEventListener('click', fireBullet);
-
-// Weapon switch button
 weaponSwitchButton.addEventListener('click', switchWeapon);
 
-// Movement button listeners (touchstart/touchend for mobile, mousedown/mouseup for desktop)
+// Movement buttons (touchstart/touchend for mobile, mousedown/mouseup for desktop)
 function handleButtonDown(button, direction) {
     button.addEventListener('touchstart', () => { moveInput[direction] = true; }, { passive: true });
     button.addEventListener('mousedown', () => { moveInput[direction] = true; });
@@ -412,7 +439,7 @@ function handleButtonDown(button, direction) {
 function handleButtonUp(button, direction) {
     button.addEventListener('touchend', () => { moveInput[direction] = false; }, { passive: true });
     button.addEventListener('mouseup', () => { moveInput[direction] = false; });
-    button.addEventListener('mouseleave', () => {moveInput[direction] = false;}); // Handle if mouse out
+    button.addEventListener('mouseleave', () => { moveInput[direction] = false; });
 }
 
 handleButtonDown(moveUpButton, 'up');
@@ -424,23 +451,23 @@ handleButtonUp(moveLeftButton, 'left');
 handleButtonDown(moveRightButton, 'right');
 handleButtonUp(moveRightButton, 'right');
 
-
 setupCollisionHandling();
 
-// Gyroscope permission handling and event listener setup (same as before)
+// --- Gyroscope Permission Handling and Game Start ---
+
 if (window.DeviceOrientationEvent) {
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
         // iOS 13+
-        fireButton.addEventListener('click', () => {  // Use fireButton to request, since Start not exits
+        fireButton.addEventListener('click', () => {
             DeviceOrientationEvent.requestPermission()
                 .then(permissionState => {
                     if (permissionState === 'granted') {
                         window.addEventListener('deviceorientation', handleOrientation);
-                         if (!isPlaying) {  // Prevent starting multiple games
+                        if (!isPlaying) { // Ensure startGame is only called once
                             startGame();
-                         }
+                        }
                     } else {
-                         messageDisplay.textContent = "Gyroscope permission denied.";
+                        messageDisplay.textContent = "Gyroscope permission denied.";
                     }
                 })
                 .catch(error => {
@@ -449,9 +476,9 @@ if (window.DeviceOrientationEvent) {
                 });
         });
     } else {
-        // Older iOS, Android, or desktop (if supported)
+        // Older iOS, Android, or desktop
         window.addEventListener('deviceorientation', handleOrientation);
-        startGame();
+        startGame(); // Start the game directly for non-iOS 13+
     }
 } else {
     messageDisplay.textContent = "Gyroscope not supported.";
