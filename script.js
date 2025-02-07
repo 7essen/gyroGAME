@@ -1,471 +1,314 @@
-// script.js (Complete Stage 2 - Combined and Refactored)
+// script.js
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const fireButton = document.getElementById('fireButton');
-const healthDisplay = document.getElementById('health');
-const ammoDisplay = document.getElementById('ammo');
 const messageDisplay = document.getElementById('message');
-const scoreDisplay = document.getElementById('score');
-const weaponSwitchButton = document.getElementById('weaponSwitch');
+const turnLeftButton = document.getElementById('turnLeft');
+const turnRightButton = document.getElementById('turnRight');
+const moveForwardButton = document.getElementById('moveForward');
+const moveBackwardButton = document.getElementById('moveBackward');
 
-// Movement buttons
-const moveUpButton = document.getElementById('moveUp');
-const moveDownButton = document.getElementById('moveDown');
-const moveLeftButton = document.getElementById('moveLeft');
-const moveRightButton = document.getElementById('moveRight');
+// --- Game Constants ---
 
-// Matter.js setup
-const engine = Matter.Engine.create();
-const world = engine.world;
+const FOV = Math.PI / 3; // Field of View (60 degrees)
+const CELL_SIZE = 10;  // Size of each maze cell (for map generation)
+const WALL_HEIGHT = 150; // Apparent height of the walls
+const PLAYER_SPEED = 0.15; // How many cells the player moves per frame
+const TURN_SPEED = 0.05; // How many radians the player turns per frame
+const NUM_RAYS = 120;   // Number of rays for raycasting
+const MAP_WIDTH = 20;    // Width of the maze (in cells)
+const MAP_HEIGHT = 20;   // Height of the maze
 
 // --- Game Variables ---
 
 let player = {
-    body: null,
-    size: 30,
-    health: 100,
-    ammo: 30,
-    angle: 0,
-    speed: 5,
-    currentWeapon: 'pistol', // 'pistol' or 'shotgun'
-    shotgunAmmo: 10,
+    x: 2,  // Initial player position (in cells)
+    y: 2,
+    angle: 0,  // Initial player angle (in radians)
 };
 
-let bullets = [];
-let enemies = [];
-const maxEnemies = 5;
+let map = [];  // The 2D array representing the maze
 let isPlaying = false;
-let score = 0;
-
-// Input handling
-let moveInput = {
-    up: false,
-    down: false,
-    left: false,
-    right: false
-};
 
 // --- Utility Functions ---
 
 function initCanvasSize() {
-    canvas.width = canvas.parentElement.clientWidth;
-    canvas.height = canvas.parentElement.clientHeight;
-    resetGame(); // Reset positions on resize
-}
-
-// Helper function for creating walls
-function createWall(x, y, width, height) {
-    const wall = Matter.Bodies.rectangle(x, y, width, height, {
-        isStatic: true,
-        label: 'wall',
-        render: { fillStyle: '#8B4513' }  // Brown color for walls
-    });
-    Matter.World.add(world, wall);
-    return wall;
-}
-
-// Creates walls around the edges of the canvas
-function createArenaBounds() {
-    const wallThickness = 20;
-    createWall(canvas.width / 2, -wallThickness / 2, canvas.width, wallThickness); // Top
-    createWall(canvas.width / 2, canvas.height + wallThickness / 2, canvas.width, wallThickness); // Bottom
-    createWall(-wallThickness / 2, canvas.height / 2, wallThickness, canvas.height); // Left
-    createWall(canvas.width + wallThickness / 2, canvas.height / 2, wallThickness, canvas.height); // Right
-}
-
-// --- Object Creation Functions ---
-
-function createPlayer() {
-    player.body = Matter.Bodies.rectangle(canvas.width / 2, canvas.height / 2, player.size, player.size, {
-        frictionAir: 0.1,
-        friction: 0.5,
-        restitution: 0.2,
-        label: 'player'
-    });
-    Matter.World.add(world, player.body);
-}
-
-function createEnemy() {
-    if (enemies.length < maxEnemies) {
-        const size = 25;
-        let x, y;
-        // Keep generating random positions until the enemy is far enough from the player
-        do {
-            x = Math.random() * canvas.width;
-            y = Math.random() * canvas.height;
-        } while (Matter.Vector.magnitude({ x: x - player.body.position.x, y: y - player.body.position.y }) < 200);
-
-        const enemy = {
-            body: Matter.Bodies.rectangle(x, y, size, size, {
-                frictionAir: 0.1,
-                friction: 0.5,
-                restitution: 0.2,
-                label: 'enemy',
-                render: { fillStyle: 'red' }
-            }),
-            size: size,
-            health: 30,
-            speed: 2
-        };
-        Matter.World.add(world, enemy.body);
-        enemies.push(enemy);
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    // Redraw the scene if the size changes, but only if playing
+    if (isPlaying) {
+        render();
     }
 }
+function createButtonEvents(button, action) {
+     // Use named functions for easier adding/removing
+     function startAction() { action(true); }
+     function stopAction()  { action(false); }
 
-// --- Drawing Functions ---
-
-function drawPlayer() {
-    ctx.save();
-    ctx.translate(player.body.position.x, player.body.position.y);
-    ctx.rotate(player.angle);
-    ctx.fillStyle = 'blue';
-    ctx.fillRect(-player.size / 2, -player.size / 2, player.size, player.size);
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(player.size, 0);  // Facing direction
-    ctx.strokeStyle = 'white';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.restore();
+    button.addEventListener('touchstart', startAction, { passive: true });
+    button.addEventListener('mousedown',  startAction);
+    button.addEventListener('touchend',   stopAction,  { passive: true });
+    button.addEventListener('mouseup',    stopAction);
+    button.addEventListener('mouseleave', stopAction);
 }
+// --- Maze Generation (Recursive Backtracker) ---
 
-function drawBullets() {
-    bullets.forEach(bullet => {
-        ctx.beginPath();
-        ctx.arc(bullet.position.x, bullet.position.y, bullet.radius, 0, 2 * Math.PI);
-        ctx.fillStyle = bullet.render.fillStyle; // Use bullet's fillStyle
-        ctx.fill();
-    });
-}
-
-function drawEnemies() {
-    enemies.forEach(enemy => {
-        ctx.save();
-        ctx.translate(enemy.body.position.x, enemy.body.position.y);
-        // Rotate the enemy to face the player
-        const angleToPlayer = Matter.Vector.angle(enemy.body.position, player.body.position);
-        ctx.rotate(angleToPlayer);
-        ctx.fillStyle = enemy.body.render.fillStyle; // Use enemy's fillStyle
-        ctx.fillRect(-enemy.size / 2, -enemy.size / 2, enemy.size, enemy.size);
-
-        // Draw enemy health bar
-        const healthBarWidth = enemy.size;
-        const healthBarHeight = 5;
-        const healthPercentage = enemy.health / 30;
-        ctx.fillStyle = 'gray';
-        ctx.fillRect(-healthBarWidth / 2, -enemy.size / 2 - 15, healthBarWidth, healthBarHeight);
-        ctx.fillStyle = 'green';
-        ctx.fillRect(-healthBarWidth / 2, -enemy.size / 2 - 15, healthBarWidth * healthPercentage, healthBarHeight);
-
-        ctx.restore();
-    });
-}
-
-// --- Game Logic Functions ---
-
-function update() {
-    if (!isPlaying) return;
-
-    Matter.Engine.update(engine, 1000 / 60);
-
-    handleMovementInput();
-    applyBoundaries(player.body, player.size);
-
-    // Update UI
-    healthDisplay.textContent = `Health: ${player.health}`;
-    ammoDisplay.textContent = `Ammo: ${player.currentWeapon === 'pistol' ? player.ammo : player.shotgunAmmo}`;
-    scoreDisplay.textContent = `Score: ${score}`;
-
-    // Update and remove off-screen bullets
-    for (let i = bullets.length - 1; i >= 0; i--) {
-        const bullet = bullets[i];
-        if (bullet.position.x < 0 || bullet.position.x > canvas.width ||
-            bullet.position.y < 0 || bullet.position.y > canvas.height) {
-            Matter.World.remove(world, bullet);
-            bullets.splice(i, 1);
+function generateMaze() {
+    // 1. Create a grid filled with walls.
+    for (let y = 0; y < MAP_HEIGHT; y++) {
+        map[y] = [];
+        for (let x = 0; x < MAP_WIDTH; x++) {
+            map[y][x] = 1; // 1 represents a wall, 0 represents a passage.
         }
     }
 
-    // Update enemies and AI
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        const enemy = enemies[i];
-        const direction = Matter.Vector.sub(player.body.position, enemy.body.position);
-        const normalizedDirection = Matter.Vector.normalise(direction);
-        const enemyVelocity = Matter.Vector.mult(normalizedDirection, enemy.speed);
-        Matter.Body.setVelocity(enemy.body, enemyVelocity);
-        applyBoundaries(enemy.body, enemy.size);
+    // 2. Pick a random starting cell.
+    let startX = Math.floor(Math.random() * MAP_WIDTH);
+    let startY = Math.floor(Math.random() * MAP_HEIGHT);
+    carvePassage(startX, startY);
 
-        if (enemy.health <= 0) {
-            Matter.World.remove(world, enemy.body);
-            enemies.splice(i, 1);
-            score += 10;
-            createEnemy(); // Respawn enemies
+      // Mark the exit (opposite side of the starting point)
+      let exitX, exitY;
+
+      if (startX < MAP_WIDTH / 2) {
+          exitX = MAP_WIDTH - 2; // Place on the right
+      } else {
+          exitX = 1;          // Place on the left
+      }
+
+      if (startY < MAP_HEIGHT / 2) {
+        exitY = MAP_HEIGHT - 2;
+      }else{
+        exitY = 1;
+      }
+
+    map[exitY][exitX] = 2; // 2 represents the exit.
+
+    // Place the player at the starting cell
+    player.x = startX + 0.5;
+    player.y = startY + 0.5;
+    player.angle = 0;
+}
+
+function carvePassage(x, y) {
+    map[y][x] = 0; // Mark the current cell as a passage.
+
+    const directions = [
+        { dx: 0, dy: -1 }, // North
+        { dx: 1, dy: 0 },  // East
+        { dx: 0, dy: 1 },  // South
+        { dx: -1, dy: 0 }  // West
+    ];
+
+    // Shuffle the directions randomly
+    directions.sort(() => Math.random() - 0.5);
+
+    for (const dir of directions) {
+        const newX = x + dir.dx * 2; // Move 2 cells to ensure walls between passages
+        const newY = y + dir.dy * 2;
+
+        // Check if the new cell is within bounds and unvisited.
+        if (newX >= 0 && newX < MAP_WIDTH && newY >= 0 && newY < MAP_HEIGHT && map[newY][newX] === 1) {
+            // Carve a passage to the new cell.
+            map[y + dir.dy][x + dir.dx] = 0;
+            carvePassage(newX, newY);
         }
     }
+}
 
-    // Render the scene
+
+// --- Raycasting and Rendering ---
+
+function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawPlayer();
-    drawBullets();
-    drawEnemies();
 
-    requestAnimationFrame(update);
-}
+    // Draw the ceiling and floor (simple gradient or solid color)
+    ctx.fillStyle = '#777'; // Ceiling
+    ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
+    ctx.fillStyle = '#555'; // Floor
+    ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
 
-function handleMovementInput() {
-    let moveX = 0;
-    let moveY = 0;
+    // Raycasting
+    for (let i = 0; i < NUM_RAYS; i++) {
+        const rayAngle = player.angle - FOV / 2 + (i / NUM_RAYS) * FOV;
+        const ray = castRay(player.x, player.y, rayAngle);
 
-    if (moveInput.up) moveY -= player.speed;
-    if (moveInput.down) moveY += player.speed;
-    if (moveInput.left) moveX -= player.speed;
-    if (moveInput.right) moveX += player.speed;
-
-    Matter.Body.setVelocity(player.body, { x: moveX, y: moveY });
-}
-
-function applyBoundaries(body, size) {
-    const halfSize = size / 2;
-    if (body.position.x < halfSize) {
-        Matter.Body.setPosition(body, { x: halfSize, y: body.position.y });
-        Matter.Body.setVelocity(body, { x: 0, y: body.velocity.y });
-    }
-    if (body.position.x > canvas.width - halfSize) {
-        Matter.Body.setPosition(body, { x: canvas.width - halfSize, y: body.position.y });
-        Matter.Body.setVelocity(body, { x: 0, y: body.velocity.y });
-    }
-    if (body.position.y < halfSize) {
-        Matter.Body.setPosition(body, { x: body.position.x, y: halfSize });
-        Matter.Body.setVelocity(body, { x: body.velocity.x, y: 0 });
-    }
-    if (body.position.y > canvas.height - halfSize) {
-        Matter.Body.setPosition(body, { x: body.position.x, y: canvas.height - halfSize });
-        Matter.Body.setVelocity(body, { x: body.velocity.x, y: 0 });
-    }
-}
-// --- Weapon and Bullet Functions ---
-
-function fireBullet() {
-    if (player.currentWeapon === 'pistol' && player.ammo > 0) {
-        player.ammo--;
-        createSingleBullet(5, 15);
-    } else if (player.currentWeapon === 'shotgun' && player.shotgunAmmo > 0) {
-        player.shotgunAmmo--;
-        createShotgunBlast();
-    }
-}
-
-function createSingleBullet(size, speed) {
-    const bulletX = player.body.position.x + (player.size / 2) * Math.cos(player.angle);
-    const bulletY = player.body.position.y + (player.size / 2) * Math.sin(player.angle);
-    const bullet = Matter.Bodies.circle(bulletX, bulletY, size, {
-        frictionAir: 0.001,
-        restitution: 0.8,
-        label: 'bullet',
-        render: { fillStyle: 'yellow' }
-    });
-    bullet.radius = size; // Store the radius for drawing
-    const velocity = { x: speed * Math.cos(player.angle), y: speed * Math.sin(player.angle) };
-    Matter.Body.setVelocity(bullet, velocity);
-    Matter.World.add(world, bullet);
-    bullets.push(bullet);
-}
-
-function createShotgunBlast() {
-    const numPellets = 8;
-    const spread = 0.3;
-    const pelletSpeed = 12;
-    const pelletSize = 3;
-
-    for (let i = 0; i < numPellets; i++) {
-        const angleOffset = (Math.random() - 0.5) * spread;
-        const pelletAngle = player.angle + angleOffset;
-        const pelletX = player.body.position.x + (player.size / 2) * Math.cos(pelletAngle);
-        const pelletY = player.body.position.y + (player.size / 2) * Math.sin(pelletAngle);
-
-        const pellet = Matter.Bodies.circle(pelletX, pelletY, pelletSize, {
-            frictionAir: 0.01,
-            restitution: 0.5,
-            label: 'bullet',
-            render: { fillStyle: 'orange' }
-        });
-        pellet.radius = pelletSize;
-        const velocity = { x: pelletSpeed * Math.cos(pelletAngle), y: pelletSpeed * Math.sin(pelletAngle) };
-        Matter.Body.setVelocity(pellet, velocity);
-        Matter.World.add(world, pellet);
-        bullets.push(pellet);
-    }
-}
-function switchWeapon() {
-    player.currentWeapon = player.currentWeapon === 'pistol' ? 'shotgun' : 'pistol';
-    console.log("Current weapon:", player.currentWeapon);
-}
-
-// --- Collision Handling ---
-
-function setupCollisionHandling() {
-    Matter.Events.on(engine, 'collisionStart', (event) => {
-        const pairs = event.pairs;
-        for (const pair of pairs) { // More concise loop
-            const { bodyA, bodyB } = pair;
-
-            if (bodyA.label === 'bullet' && bodyB.label === 'enemy') {
-                handleBulletHitEnemy(bodyA, bodyB);
-            } else if (bodyB.label === 'bullet' && bodyA.label === 'enemy') {
-                handleBulletHitEnemy(bodyB, bodyA);
-            } else if ((bodyA.label === 'enemy' && bodyB.label === 'player') || (bodyB.label === 'enemy' && bodyA.label === 'player')) {
-                 handlePlayerEnemyCollision(bodyA, bodyB);
+        if (ray) {
+            drawWallSlice(i, ray);
+             // Check if the ray hit the exit
+            if (ray.exit) {
+                 drawExitSlice(i, ray);
             }
         }
-    });
-}
-function handlePlayerEnemyCollision(bodyA, bodyB) {
-    // Determine which body is the player and which is the enemy
-    const playerBody = bodyA.label === 'player' ? bodyA : bodyB;
-    const enemyBody = bodyA.label === 'enemy' ? bodyA : bodyB;
-    // Reduce player's health
-    player.health -= 5;
-
-    // Check for game over
-    if (player.health <= 0) {
-        gameOver();
-    }
-}
-function handleBulletHitEnemy(bullet, enemyBody) {
-    Matter.World.remove(world, bullet);
-    const bulletIndex = bullets.indexOf(bullet);
-    if (bulletIndex > -1) {
-        bullets.splice(bulletIndex, 1);
-    }
-
-    const enemy = enemies.find(e => e.body === enemyBody);
-    if (enemy) {
-        enemy.health -= (player.currentWeapon === 'pistol' ? 10 : 5);
     }
 }
 
-// --- Game State Functions ---
-function resetGame() {
-    // Reset player
-    player.health = 100;
-    player.ammo = 30;
-    player.shotgunAmmo = 10;
-    player.currentWeapon = 'pistol';
-    if (player.body) {
-        Matter.Body.setPosition(player.body, { x: canvas.width / 2, y: canvas.height / 2 });
-        Matter.Body.setVelocity(player.body, {x: 0, y: 0});
+function castRay(x, y, angle) {
+    let dx = Math.cos(angle);
+    let dy = Math.sin(angle);
+    let rayX = x;
+    let rayY = y;
+    let distance = 0;
+    let hitWall = false;
+    let hitExit = false;
+
+    while (!hitWall && distance < 20) { // Limit ray distance to avoid infinite loops
+        rayX += dx * 0.1;
+        rayY += dy * 0.1;
+        distance += 0.1;
+
+        const mapX = Math.floor(rayX);
+        const mapY = Math.floor(rayY);
+
+        if (mapX < 0 || mapX >= MAP_WIDTH || mapY < 0 || mapY >= MAP_HEIGHT) {
+            hitWall = true; // Treat out-of-bounds as a wall
+        } else if (map[mapY][mapX] === 1) {
+            hitWall = true;
+        } else if (map[mapY][mapX] === 2) {
+            hitWall = true; // Treat the exit as a wall for raycasting purposes
+            hitExit = true;
+        }
     }
 
-    // Clear bullets
-    bullets.forEach(b => Matter.World.remove(world, b));
-    bullets = [];
-
-    // Clear and recreate enemies
-    enemies.forEach(e => Matter.World.remove(world, e.body));
-    enemies = [];
-    for (let i = 0; i < maxEnemies; i++) {
-        createEnemy();
-    }
-     score = 0;
+     // Correct fish-eye distortion
+     const correctedDistance = distance * Math.cos(angle - player.angle);
+     return { distance: correctedDistance, hitWall, hitExit };
 }
 
-function startGame() {
-    if(isPlaying) return; // Prevent starting multiple games
-    isPlaying = true;
-    score = 0;
-    messageDisplay.textContent = '';
-    createPlayer(); // Create or reset the player
-    createArenaBounds(); //Create the arena
-    requestAnimationFrame(update); // Start/resume the game loop
+function drawWallSlice(rayIndex, ray) {
+    const sliceWidth = canvas.width / NUM_RAYS;
+    const sliceHeight = WALL_HEIGHT / (ray.distance + 0.0001); // Avoid division by zero
+
+    const x = rayIndex * sliceWidth;
+    const y = canvas.height / 2 - sliceHeight / 2;
+
+    // Simple shading based on distance
+    const shade = Math.min(1, ray.distance / 10);
+    const wallColor = `hsl(0, 0%, ${50 - shade * 30}%)`; // Grayscale, darker with distance
+
+    ctx.fillStyle = wallColor;
+    ctx.fillRect(x, y, sliceWidth, sliceHeight);
 }
+function drawExitSlice(rayIndex, ray) {
+    const sliceWidth = canvas.width / NUM_RAYS;
+    const sliceHeight = WALL_HEIGHT / (ray.distance + 0.0001);
 
-function gameOver() {
-    isPlaying = false;
-    messageDisplay.textContent = 'Game Over!';
+    const x = rayIndex * sliceWidth;
+    const y = canvas.height / 2 - sliceHeight / 2;
 
-    // Clean up Matter.js bodies
-    if (player.body) {
-        Matter.World.remove(world, player.body);
-    }
-    bullets.forEach(b => Matter.World.remove(world, b));
-    enemies.forEach(e => Matter.World.remove(world, e.body));
-
-    // Clear arrays
-    bullets = [];
-    enemies = [];
+    ctx.fillStyle = 'green'; // Distinct color for the exit
+    ctx.fillRect(x, y, sliceWidth, sliceHeight);
 }
 
 // --- Input Handling ---
 
-let previousTiltLR = null;
-let previousTiltFB = null;
+let movement = { forward: false, backward: false, turnLeft: false, turnRight: false };
 
+function update() {
+    if (!isPlaying) return;
+
+    // Turning
+    if (movement.turnLeft) player.angle -= TURN_SPEED;
+    if (movement.turnRight) player.angle += TURN_SPEED;
+
+    // Keep the angle within 0 to 2*PI
+    player.angle = (player.angle + 2 * Math.PI) % (2 * Math.PI);
+
+    // Movement
+    let moveStep = movement.forward ? PLAYER_SPEED : (movement.backward ? -PLAYER_SPEED : 0);
+    let newX = player.x + Math.cos(player.angle) * moveStep;
+    let newY = player.y + Math.sin(player.angle) * moveStep;
+
+    // Collision detection (simple)
+    if (isWalkable(newX, newY)) {
+        player.x = newX;
+        player.y = newY;
+    }
+      // Check for win condition (reaching the exit)
+      if (map[Math.floor(player.y)][Math.floor(player.x)] === 2) {
+           winGame();
+           return; // Stop updating
+      }
+
+    render();
+    requestAnimationFrame(update);
+}
+
+function isWalkable(x, y) {
+    const mapX = Math.floor(x);
+    const mapY = Math.floor(y);
+    if (mapX < 0 || mapX >= MAP_WIDTH || mapY < 0 || mapY >= MAP_HEIGHT) {
+        return false; // Out of bounds
+    }
+    return map[mapY][mapX] === 0 || map[mapY][mapX] === 2; // 0 is walkable, 2 is exit
+}
+
+// --- Gyroscope Handling ---
+let previousTiltLR = 0;
 function handleOrientation(event) {
     if (!isPlaying) return;
 
-    let tiltLR = event.gamma || 0;
-    let tiltFB = event.beta || 0;
+    let tiltLR = event.gamma || 0; // Left-to-right
 
-    // Landscape mode adjustment
-    if (window.innerWidth > window.innerHeight) {
-        [tiltLR, tiltFB] = [tiltFB, tiltLR];
+     // Landscape mode adjustment
+     if (window.innerWidth > window.innerHeight) {
+        tiltLR = event.beta || 0;
     }
 
-    // Smoothing
-    const smoothing = 0.2;
-    tiltLR = tiltLR * smoothing + (1 - smoothing) * (previousTiltLR || tiltLR);
-    tiltFB = tiltFB * smoothing + (1 - smoothing) * (previousTiltFB || tiltFB);
+    // Smoothing (optional, but makes movement less jittery)
+    const smoothing = 0.3;
+    tiltLR = tiltLR * smoothing + previousTiltLR * (1 - smoothing);
     previousTiltLR = tiltLR;
-    previousTiltFB = tiltFB;
 
-    // Calculate player angle
-    player.angle = Math.atan2(tiltFB, tiltLR) - Math.PI / 2;
+    // Update player angle based on tilt (with clamping)
+     const tiltAngle = tiltLR * Math.PI / 180; // Convert to radians
+     player.angle += tiltAngle * 0.3;  // Adjust sensitivity by multiplying
+     player.angle = (player.angle + 2 * Math.PI) % (2 * Math.PI); // Keep it within 0-2PI
+     render(); // Re-render immediately after changing angle
 }
 
+// --- Game Start/End ---
+
+function startGame() {
+   if(isPlaying) return; // Prevent staring multiple times
+    isPlaying = true;
+    messageDisplay.textContent = '';
+    generateMaze();
+    render();
+    requestAnimationFrame(update);
+}
+function winGame() {
+    isPlaying = false;
+    messageDisplay.textContent = "You Win! Click to restart.";
+    messageDisplay.addEventListener('click', restartGame);
+}
+function restartGame(){
+     messageDisplay.removeEventListener('click', restartGame); // Prevent multiple listener
+     startGame();
+}
 // --- Event Listeners ---
 
 initCanvasSize();
 window.addEventListener('resize', initCanvasSize);
-fireButton.addEventListener('click', fireBullet);
-weaponSwitchButton.addEventListener('click', switchWeapon);
 
-// Movement buttons (touchstart/touchend for mobile, mousedown/mouseup for desktop)
-function handleButtonDown(button, direction) {
-    button.addEventListener('touchstart', () => { moveInput[direction] = true; }, { passive: true });
-    button.addEventListener('mousedown', () => { moveInput[direction] = true; });
-}
 
-function handleButtonUp(button, direction) {
-    button.addEventListener('touchend', () => { moveInput[direction] = false; }, { passive: true });
-    button.addEventListener('mouseup', () => { moveInput[direction] = false; });
-    button.addEventListener('mouseleave', () => { moveInput[direction] = false; });
-}
+createButtonEvents(turnLeftButton,    (pressed) => {movement.turnLeft = pressed});
+createButtonEvents(turnRightButton,   (pressed) => {movement.turnRight = pressed});
+createButtonEvents(moveForwardButton, (pressed) => {movement.forward = pressed});
+createButtonEvents(moveBackwardButton,(pressed) => {movement.backward = pressed});
 
-handleButtonDown(moveUpButton, 'up');
-handleButtonUp(moveUpButton, 'up');
-handleButtonDown(moveDownButton, 'down');
-handleButtonUp(moveDownButton, 'down');
-handleButtonDown(moveLeftButton, 'left');
-handleButtonUp(moveLeftButton, 'left');
-handleButtonDown(moveRightButton, 'right');
-handleButtonUp(moveRightButton, 'right');
 
-setupCollisionHandling();
-
-// --- Gyroscope Permission Handling and Game Start ---
-
+// Gyroscope permission handling and initial game start
 if (window.DeviceOrientationEvent) {
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
         // iOS 13+
-        fireButton.addEventListener('click', () => {
+        messageDisplay.textContent = "Tap to start and grant gyroscope access";
+         messageDisplay.addEventListener('click', () => {
             DeviceOrientationEvent.requestPermission()
                 .then(permissionState => {
                     if (permissionState === 'granted') {
                         window.addEventListener('deviceorientation', handleOrientation);
-                        if (!isPlaying) { // Ensure startGame is only called once
-                            startGame();
-                        }
+                        startGame();
                     } else {
                         messageDisplay.textContent = "Gyroscope permission denied.";
                     }
@@ -478,7 +321,9 @@ if (window.DeviceOrientationEvent) {
     } else {
         // Older iOS, Android, or desktop
         window.addEventListener('deviceorientation', handleOrientation);
-        startGame(); // Start the game directly for non-iOS 13+
+         messageDisplay.textContent = "Tap to start";
+         messageDisplay.addEventListener('click', startGame);
+
     }
 } else {
     messageDisplay.textContent = "Gyroscope not supported.";
